@@ -5,6 +5,7 @@
       'type': 'none',
       'dependencies': [
         'chromiumcontent',
+        'ffmpeg',
         '<(DEPTH)/chrome/chrome.gyp:chromedriver',
       ],
       'conditions': [
@@ -47,6 +48,17 @@
             '<(DEPTH)/pdf/pdf.gyp:pdf',
           ],
         }],
+      ],
+    },
+    {
+      'target_name': 'ffmpeg',
+      'type': 'shared_library',
+      'dependencies': [
+        '<(DEPTH)/third_party/ffmpeg/ffmpeg.gyp:ffmpeg',
+        '<(DEPTH)/third_party/ffmpeg/ffmpeg.gyp:ffmpegsumo',
+      ],
+      'sources': [
+        'empty.cc',
       ],
     },
   ],
