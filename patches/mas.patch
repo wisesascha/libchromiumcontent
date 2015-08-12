@@ -1,6 +1,6 @@
 diff -ruN chrome/browser/process_singleton_posix.cc chrome/browser/process_singleton_posix.cc
---- chrome/browser/process_singleton_posix.cc	2015-02-25 13:55:44.000000000 -0800
-+++ chrome/browser/process_singleton_posix.cc	2015-06-28 23:06:25.000000000 -0700
+--- chrome/browser/process_singleton_posix.cc
++++ chrome/browser/process_singleton_posix.cc
 @@ -37,6 +37,7 @@
  // retrieves the process id from the symbol link and kills it by sending
  // SIGKILL. Then the second process starts as normal.
@@ -126,8 +126,8 @@ diff -ruN chrome/browser/process_singleton_posix.cc chrome/browser/process_singl
      return false;
    }
 diff -ruN chrome/common/chrome_constants.cc chrome/common/chrome_constants.cc
---- chrome/common/chrome_constants.cc	2015-04-23 11:58:06.000000000 -0700
-+++ chrome/common/chrome_constants.cc	2015-06-28 23:08:44.000000000 -0700
+--- chrome/common/chrome_constants.cc
++++ chrome/common/chrome_constants.cc
 @@ -7,7 +7,7 @@
  #include "base/files/file_path.h"
 
@@ -159,9 +159,96 @@ diff -ruN chrome/common/chrome_constants.cc chrome/common/chrome_constants.cc
  const base::FilePath::CharType kSupervisedUserSettingsFilename[] =
      FPL("Managed Mode Settings");
  const base::FilePath::CharType kSyncCredentialsFilename[] =
+diff -ruN chromiumcontent/chromiumcontent.gypi chromiumcontent/chromiumcontent.gypi
+--- chromiumcontent/chromiumcontent.gypi
++++ chromiumcontent/chromiumcontent.gypi
+@@ -3,10 +3,21 @@
+     # Enalbe using proprietary codecs.
+     'proprietary_codecs': 1,
+     'ffmpeg_branding': 'Chrome',
++    # And the gold's flags are not available in system's ld neither.
++    'linux_use_gold_flags': 0,
++    # Make Linux build contain debug symbols, this flag will add '-g' to cflags.
++    'linux_dump_symbols': 1,
++    # The Linux build of libchromiumcontent.so depends on, but doesn't
++    # provide, tcmalloc by default.  Disabling tcmalloc here also prevents
++    # any conflicts when linking to binaries or libraries that don't use
++    # tcmalloc.
++    'linux_use_tcmalloc': 0,
+     # Using libc++ requires building for >= 10.7.
+     'mac_deployment_target': '10.8',
+     # The 10.8 SDK does not work well with C++11.
+     'mac_sdk_min': '10.9',
++    # Use OpenSSL.
++    'use_openssl': 1,
+     # Use the standard way of linking with msvc runtime.
+     'win_use_allocator_shim': 0,
+     'win_release_RuntimeLibrary': '2',
+@@ -24,25 +35,20 @@
+         'enable_hidpi': 1,
+         # Use Dbus.
+         'use_dbus': 1,
+-        # Make Linux build contain debug symbols, this flag will add '-g' to
+-        # cflags.
+-        'linux_dump_symbols': 1,
+-        # The Linux build of libchromiumcontent.so depends on, but doesn't
+-        # provide, tcmalloc by default.  Disabling tcmalloc here also prevents
+-        # any conflicts when linking to binaries or libraries that don't use
+-        # tcmalloc.
+-        'linux_use_tcmalloc': 0,
+-        # Force using gold linker.
+-        'linux_use_bundled_gold': 1,
+-        'conditions': [
+-          ['target_arch=="arm"', {
+-            'arm_version': 7,
+-            'arm_float_abi': 'hard',
+-          }],
+-          ['target_arch=="ia32"', {
+-            'sysroot': '<!(cd <(DEPTH) && pwd -P)/chrome/installer/linux/debian_wheezy_i386-sysroot',
+-          }],
+-        ],
++      }],
++      ['OS=="linux" and target_arch=="arm"', {
++        'arm_version': 7,
++        'arm_float_abi': 'hard',
++        'linux_dump_symbols': 0,
++      }],
++      ['OS=="linux" and host_arch=="x64"', {
++        'linux_use_gold_flags': 1,
++      }],
++      ['OS=="linux" and host_arch=="ia32"', {
++        # Use system installed clang for building.
++        'make_clang_dir': '/usr',
++        'clang': 1,
++        'clang_use_chrome_plugins': 0,
+       }],
+     ],
+   },
+@@ -82,10 +88,17 @@
+       'U_STATIC_IMPLEMENTATION',
+     ],
+     'conditions': [
+-      ['OS=="linux" and target_arch=="arm"', {
+-        # Work around ODR violations.
+-        'ldflags!': [
+-          '-Wl,--detect-odr-violations',
++      ['OS=="linux" and host_arch=="ia32"', {
++        'cflags!': [
++          # Clang 3.4 doesn't support these flags.
++          '-Wno-absolute-value',
++          '-Wno-inconsistent-missing-override',
++          '-Wno-pointer-bool-conversion',
++          '-Wno-tautological-pointer-compare',
++          '-Wno-unused-local-typedef',
++          '-Wno-unused-local-typedefs',
++          '-Wno-undefined-bool-conversion',
++          '-Wno-tautological-undefined-compare',
+         ],
+       }],
+     ],
 diff -ruN content/browser/accessibility/browser_accessibility_cocoa.mm content/browser/accessibility/browser_accessibility_cocoa.mm
---- content/browser/accessibility/browser_accessibility_cocoa.mm	2015-05-21 19:44:08.000000000 -0700
-+++ content/browser/accessibility/browser_accessibility_cocoa.mm	2015-06-28 23:10:20.000000000 -0700
+--- content/browser/accessibility/browser_accessibility_cocoa.mm
++++ content/browser/accessibility/browser_accessibility_cocoa.mm
 @@ -4,6 +4,7 @@
 
  #include <execinfo.h>
@@ -199,8 +286,8 @@ diff -ruN content/browser/accessibility/browser_accessibility_cocoa.mm content/b
  }
 
 diff -ruN content/browser/device_monitor_mac.mm content/browser/device_monitor_mac.mm
---- content/browser/device_monitor_mac.mm	2015-04-23 11:58:11.000000000 -0700
-+++ content/browser/device_monitor_mac.mm	2015-06-28 23:13:35.000000000 -0700
+--- content/browser/device_monitor_mac.mm
++++ content/browser/device_monitor_mac.mm
 @@ -4,7 +4,11 @@
 
  #include "content/browser/device_monitor_mac.h"
@@ -276,8 +363,8 @@ diff -ruN content/browser/device_monitor_mac.mm content/browser/device_monitor_m
  }
 
 diff -ruN content/browser/renderer_host/render_widget_host_view_mac.mm content/browser/renderer_host/render_widget_host_view_mac.mm
---- content/browser/renderer_host/render_widget_host_view_mac.mm	2015-05-21 19:44:08.000000000 -0700
-+++ content/browser/renderer_host/render_widget_host_view_mac.mm	2015-06-29 08:22:31.000000000 -0700
+--- content/browser/renderer_host/render_widget_host_view_mac.mm
++++ content/browser/renderer_host/render_widget_host_view_mac.mm
 @@ -2,6 +2,7 @@
  // Use of this source code is governed by a BSD-style license that can be
  // found in the LICENSE file.
@@ -313,8 +400,8 @@ diff -ruN content/browser/renderer_host/render_widget_host_view_mac.mm content/b
    }
    return validAttributesForMarkedText_.get();
 diff -ruN content/browser/web_contents/web_contents_view_mac.mm content/browser/web_contents/web_contents_view_mac.mm
---- content/browser/web_contents/web_contents_view_mac.mm	2015-04-06 10:59:23.000000000 -0700
-+++ content/browser/web_contents/web_contents_view_mac.mm	2015-06-29 11:15:10.000000000 -0700
+--- content/browser/web_contents/web_contents_view_mac.mm
++++ content/browser/web_contents/web_contents_view_mac.mm
 @@ -594,7 +594,7 @@
      return;
 
@@ -325,8 +412,8 @@ diff -ruN content/browser/web_contents/web_contents_view_mac.mm content/browser/
    if (direction == NSDirectSelection)
      return;
 diff -ruN content/common/sandbox_mac.mm content/common/sandbox_mac.mm
---- content/common/sandbox_mac.mm	2015-04-06 10:59:23.000000000 -0700
-+++ content/common/sandbox_mac.mm	2015-06-29 08:23:39.000000000 -0700
+--- content/common/sandbox_mac.mm
++++ content/common/sandbox_mac.mm
 @@ -39,10 +39,13 @@
  #include "third_party/icu/source/common/unicode/uchar.h"
  #include "ui/base/layout.h"
@@ -352,20 +439,20 @@ diff -ruN content/common/sandbox_mac.mm content/common/sandbox_mac.mm
    }
  }
 
-diff -ruN media/BUILD.gn media/BUILD.gn
---- media/BUILD.gn	2015-05-21 19:44:09.000000000 -0700
-+++ media/BUILD.gn	2015-06-29 23:46:11.000000000 -0700
-@@ -398,7 +398,6 @@
-       "CoreMIDI.framework",
-       "CoreVideo.framework",
-       "OpenGL.framework",
--      "QTKit.framework",
-     ]
-   }
+ diff -ruN media/BUILD.gn media/BUILD.gn
+ --- media/BUILD.gn
+ +++ media/BUILD.gn
+ @@ -398,7 +398,6 @@
+        "CoreMIDI.framework",
+        "CoreVideo.framework",
+        "OpenGL.framework",
+ -      "QTKit.framework",
+      ]
+    }
 
 diff -ruN media/media.gyp media/media.gyp
---- media/media.gyp	2015-05-21 19:44:09.000000000 -0700
-+++ media/media.gyp	2015-06-30 00:11:49.000000000 -0700
+--- media/media.gyp
++++ media/media.gyp
 @@ -590,8 +590,6 @@
          'video/capture/mac/video_capture_device_factory_mac.mm',
          'video/capture/mac/video_capture_device_mac.h',
@@ -384,8 +471,8 @@ diff -ruN media/media.gyp media/media.gyp
            },
          }],
 diff -ruN media/video/capture/mac/video_capture_device_factory_mac.mm media/video/capture/mac/video_capture_device_factory_mac.mm
---- media/video/capture/mac/video_capture_device_factory_mac.mm	2015-04-06 10:59:31.000000000 -0700
-+++ media/video/capture/mac/video_capture_device_factory_mac.mm	2015-06-29 10:19:46.000000000 -0700
+--- media/video/capture/mac/video_capture_device_factory_mac.mm
++++ media/video/capture/mac/video_capture_device_factory_mac.mm
 @@ -2,6 +2,8 @@
  // Use of this source code is governed by a BSD-style license that can be
  // found in the LICENSE file.
@@ -447,8 +534,8 @@ diff -ruN media/video/capture/mac/video_capture_device_factory_mac.mm media/vide
 
  void VideoCaptureDeviceFactoryMac::EnumerateDeviceNames(const base::Callback<
 diff -ruN media/video/capture/mac/video_capture_device_mac.h media/video/capture/mac/video_capture_device_mac.h
---- media/video/capture/mac/video_capture_device_mac.h	2015-04-23 11:58:15.000000000 -0700
-+++ media/video/capture/mac/video_capture_device_mac.h	2015-06-29 08:59:50.000000000 -0700
+--- media/video/capture/mac/video_capture_device_mac.h
++++ media/video/capture/mac/video_capture_device_mac.h
 @@ -7,6 +7,7 @@
  // although namely deprecated in 10.9, and AVFoundation is available in versions
  // 10.7 (Lion) and later.
@@ -478,8 +565,8 @@ diff -ruN media/video/capture/mac/video_capture_device_mac.h media/video/capture
    // Used with Bind and PostTask to ensure that methods aren't called after the
    // VideoCaptureDeviceMac is destroyed.
 diff -ruN media/video/capture/mac/video_capture_device_mac.mm media/video/capture/mac/video_capture_device_mac.mm
---- media/video/capture/mac/video_capture_device_mac.mm	2015-04-23 11:58:15.000000000 -0700
-+++ media/video/capture/mac/video_capture_device_mac.mm	2015-06-29 10:18:20.000000000 -0700
+--- media/video/capture/mac/video_capture_device_mac.mm
++++ media/video/capture/mac/video_capture_device_mac.mm
 @@ -1,7 +1,10 @@
  // Copyright (c) 2012 The Chromium Authors. All rights reserved.
  // Use of this source code is governed by a BSD-style license that can be
@@ -633,8 +720,8 @@ diff -ruN media/video/capture/mac/video_capture_device_mac.mm media/video/captur
  }
 
 diff -ruN media/video/capture/mac/video_capture_device_qtkit_mac.h media/video/capture/mac/video_capture_device_qtkit_mac.h
---- media/video/capture/mac/video_capture_device_qtkit_mac.h	2014-10-10 01:10:44.000000000 -0700
-+++ media/video/capture/mac/video_capture_device_qtkit_mac.h	2015-06-29 09:17:41.000000000 -0700
+--- media/video/capture/mac/video_capture_device_qtkit_mac.h
++++ media/video/capture/mac/video_capture_device_qtkit_mac.h
 @@ -5,6 +5,9 @@
  // VideoCaptureDeviceQTKit implements all QTKit related code for
  // communicating with a QTKit capture device.
@@ -651,8 +738,8 @@ diff -ruN media/video/capture/mac/video_capture_device_qtkit_mac.h media/video/c
  #endif  // MEDIA_VIDEO_CAPTURE_MAC_VIDEO_CAPTURE_DEVICE_QTKIT_MAC_H_
 +#endif //MAC_APP_STORE
 diff -ruN media/video/capture/mac/video_capture_device_qtkit_mac.mm media/video/capture/mac/video_capture_device_qtkit_mac.mm
---- media/video/capture/mac/video_capture_device_qtkit_mac.mm	2015-04-23 11:58:15.000000000 -0700
-+++ media/video/capture/mac/video_capture_device_qtkit_mac.mm	2015-06-29 09:18:27.000000000 -0700
+--- media/video/capture/mac/video_capture_device_qtkit_mac.mm
++++ media/video/capture/mac/video_capture_device_qtkit_mac.mm
 @@ -2,6 +2,9 @@
  // Use of this source code is governed by a BSD-style license that can be
  // found in the LICENSE file.
@@ -669,8 +756,8 @@ diff -ruN media/video/capture/mac/video_capture_device_qtkit_mac.mm media/video/
  @end
 +#endif
 diff -ruN net/dns/dns_config_service_posix.cc net/dns/dns_config_service_posix.cc
---- net/dns/dns_config_service_posix.cc	2015-05-21 19:44:09.000000000 -0700
-+++ net/dns/dns_config_service_posix.cc	2015-06-29 10:01:50.000000000 -0700
+--- net/dns/dns_config_service_posix.cc
++++ net/dns/dns_config_service_posix.cc
 @@ -2,6 +2,7 @@
  // Use of this source code is governed by a BSD-style license that can be
  // found in the LICENSE file.
@@ -700,8 +787,26 @@ diff -ruN net/dns/dns_config_service_posix.cc net/dns/dns_config_service_posix.c
    }
 
 diff -ruN third_party/WebKit/Source/core/layout/LayoutThemeMac.mm third_party/WebKit/Source/core/layout/LayoutThemeMac.mm
---- third_party/WebKit/Source/core/layout/LayoutThemeMac.mm	2015-04-23 11:58:59.000000000 -0700
-+++ third_party/WebKit/Source/core/layout/LayoutThemeMac.mm	2015-06-29 10:55:42.000000000 -0700
+--- third_party/WebKit/Source/core/layout/LayoutThemeMac.mm
++++ third_party/WebKit/Source/core/layout/LayoutThemeMac.mm
+@@ -145,7 +145,7 @@
+ extern "C" {
+ void _NSDrawCarbonThemeBezel(NSRect frame, BOOL enabled, BOOL flipped);
+ // Request for public API: rdar://13787640
+-void _NSDrawCarbonThemeListBox(NSRect frame, BOOL enabled, BOOL flipped, BOOL always_yes);
++// void _NSDrawCarbonThemeListBox(NSRect frame, BOOL enabled, BOOL flipped, BOOL always_yes);
+ }
+
+ namespace blink {
+@@ -781,7 +781,7 @@
+ bool LayoutThemeMac::paintTextArea(LayoutObject* o, const PaintInfo& paintInfo, const IntRect& r)
+ {
+     LocalCurrentGraphicsContext localContext(paintInfo.context, r);
+-    _NSDrawCarbonThemeListBox(r, isEnabled(o) && !isReadOnlyControl(o), YES, YES);
++    // _NSDrawCarbonThemeListBox(r, isEnabled(o) && !isReadOnlyControl(o), YES, YES);
+     return false;
+ }
+
 @@ -1001,7 +1001,7 @@
      // Now inflate it to account for the shadow.
      IntRect inflatedRect = rect;
@@ -712,8 +817,8 @@ diff -ruN third_party/WebKit/Source/core/layout/LayoutThemeMac.mm third_party/We
      LayoutProgress* renderProgress = toLayoutProgress(layoutObject);
      HIThemeTrackDrawInfo trackInfo;
 diff -ruN third_party/WebKit/Source/platform/mac/KillRingMac.mm third_party/WebKit/Source/platform/mac/KillRingMac.mm
---- third_party/WebKit/Source/platform/mac/KillRingMac.mm	2014-10-10 01:32:50.000000000 -0700
-+++ third_party/WebKit/Source/platform/mac/KillRingMac.mm	2015-06-29 09:43:06.000000000 -0700
+--- third_party/WebKit/Source/platform/mac/KillRingMac.mm
++++ third_party/WebKit/Source/platform/mac/KillRingMac.mm
 @@ -32,12 +32,12 @@
 
  // Kill ring calls. Would be better to use NSKillRing.h, but that's not available as API or SPI.
@@ -780,8 +885,8 @@ diff -ruN third_party/WebKit/Source/platform/mac/KillRingMac.mm third_party/WebK
 
  } // namespace blink
 diff -ruN third_party/WebKit/Source/platform/mac/ScrollAnimatorMac.mm third_party/WebKit/Source/platform/mac/ScrollAnimatorMac.mm
---- third_party/WebKit/Source/platform/mac/ScrollAnimatorMac.mm	2015-04-23 11:59:00.000000000 -0700
-+++ third_party/WebKit/Source/platform/mac/ScrollAnimatorMac.mm	2015-06-29 10:11:30.000000000 -0700
+--- third_party/WebKit/Source/platform/mac/ScrollAnimatorMac.mm
++++ third_party/WebKit/Source/platform/mac/ScrollAnimatorMac.mm
 @@ -22,6 +22,8 @@
   * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
   * THE POSSIBILITY OF SUCH DAMAGE.
@@ -792,8 +897,8 @@ diff -ruN third_party/WebKit/Source/platform/mac/ScrollAnimatorMac.mm third_part
  #include "config.h"
 
 diff -ruN third_party/WebKit/Source/platform/scroll/ScrollbarThemeMacCommon.mm third_party/WebKit/Source/platform/scroll/ScrollbarThemeMacCommon.mm
---- third_party/WebKit/Source/platform/scroll/ScrollbarThemeMacCommon.mm	2015-05-21 19:45:15.000000000 -0700
-+++ third_party/WebKit/Source/platform/scroll/ScrollbarThemeMacCommon.mm	2015-06-29 11:02:59.000000000 -0700
+--- third_party/WebKit/Source/platform/scroll/ScrollbarThemeMacCommon.mm
++++ third_party/WebKit/Source/platform/scroll/ScrollbarThemeMacCommon.mm
 @@ -23,6 +23,8 @@
   * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   */
@@ -804,8 +909,8 @@ diff -ruN third_party/WebKit/Source/platform/scroll/ScrollbarThemeMacCommon.mm t
  #include "platform/RuntimeEnabledFeatures.h"
  #include "platform/scroll/ScrollbarThemeMacCommon.h"
 diff -ruN third_party/WebKit/Source/platform/scroll/ScrollbarThemeMacOverlayAPI.mm third_party/WebKit/Source/platform/scroll/ScrollbarThemeMacOverlayAPI.mm
---- third_party/WebKit/Source/platform/scroll/ScrollbarThemeMacOverlayAPI.mm	2015-05-21 19:45:15.000000000 -0700
-+++ third_party/WebKit/Source/platform/scroll/ScrollbarThemeMacOverlayAPI.mm	2015-06-29 10:30:51.000000000 -0700
+--- third_party/WebKit/Source/platform/scroll/ScrollbarThemeMacOverlayAPI.mm
++++ third_party/WebKit/Source/platform/scroll/ScrollbarThemeMacOverlayAPI.mm
 @@ -122,7 +122,7 @@
 
  int ScrollbarThemeMacOverlayAPI::scrollbarThickness(ScrollbarControlSize controlSize)
@@ -816,8 +921,8 @@ diff -ruN third_party/WebKit/Source/platform/scroll/ScrollbarThemeMacOverlayAPI.
          [scrollbarPainter setExpanded:YES];
      return [scrollbarPainter trackBoxWidth];
 diff -ruN third_party/WebKit/Source/web/mac/WebScrollbarTheme.mm third_party/WebKit/Source/web/mac/WebScrollbarTheme.mm
---- third_party/WebKit/Source/web/mac/WebScrollbarTheme.mm	2015-02-25 13:56:23.000000000 -0800
-+++ third_party/WebKit/Source/web/mac/WebScrollbarTheme.mm	2015-06-29 11:04:16.000000000 -0700
+--- third_party/WebKit/Source/web/mac/WebScrollbarTheme.mm
++++ third_party/WebKit/Source/web/mac/WebScrollbarTheme.mm
 @@ -40,8 +40,6 @@
 
  namespace blink {
@@ -836,9 +941,85 @@ diff -ruN third_party/WebKit/Source/web/mac/WebScrollbarTheme.mm third_party/Web
  }
 
  } // namespace blink
+diff -ruN third_party/crashpad/crashpad/util/mac/mac_util.cc third_party/crashpad/crashpad/util/mac/mac_util.cc
+--- third_party/crashpad/crashpad/util/mac/mac_util.cc
++++ third_party/crashpad/crashpad/util/mac/mac_util.cc
+@@ -39,16 +39,16 @@
+ // Don’t call these functions directly, call them through the
+ // TryCFCopy*VersionDictionary() helpers to account for the possibility that
+ // they may not be present at runtime.
+-CFDictionaryRef _CFCopySystemVersionDictionary() WEAK_IMPORT;
+-CFDictionaryRef _CFCopyServerVersionDictionary() WEAK_IMPORT;
++// CFDictionaryRef _CFCopySystemVersionDictionary() WEAK_IMPORT;
++// CFDictionaryRef _CFCopyServerVersionDictionary() WEAK_IMPORT;
+
+ // Don’t use these constants with CFDictionaryGetValue() directly, use them with
+ // the TryCFDictionaryGetValue() wrapper to account for the possibility that
+ // they may not be present at runtime.
+-extern const CFStringRef _kCFSystemVersionProductNameKey WEAK_IMPORT;
+-extern const CFStringRef _kCFSystemVersionProductVersionKey WEAK_IMPORT;
+-extern const CFStringRef _kCFSystemVersionProductVersionExtraKey WEAK_IMPORT;
+-extern const CFStringRef _kCFSystemVersionBuildVersionKey WEAK_IMPORT;
++// extern const CFStringRef _kCFSystemVersionProductNameKey WEAK_IMPORT;
++// extern const CFStringRef _kCFSystemVersionProductVersionKey WEAK_IMPORT;
++// extern const CFStringRef _kCFSystemVersionProductVersionExtraKey WEAK_IMPORT;
++// extern const CFStringRef _kCFSystemVersionBuildVersionKey WEAK_IMPORT;
+
+ #undef WEAK_IMPORT
+
+@@ -96,16 +96,10 @@
+ // Helpers for the weak-imported private CoreFoundation internals.
+
+ CFDictionaryRef TryCFCopySystemVersionDictionary() {
+-  if (_CFCopySystemVersionDictionary) {
+-    return _CFCopySystemVersionDictionary();
+-  }
+   return nullptr;
+ }
+
+ CFDictionaryRef TryCFCopyServerVersionDictionary() {
+-  if (_CFCopyServerVersionDictionary) {
+-    return _CFCopyServerVersionDictionary();
+-  }
+   return nullptr;
+ }
+
+@@ -210,8 +204,8 @@
+
+   bool success = true;
+
+-  CFStringRef version_cf = base::mac::CFCast<CFStringRef>(
+-      TryCFDictionaryGetValue(dictionary, _kCFSystemVersionProductVersionKey));
++  // CFStringRef version_cf = base::mac::CFCast<CFStringRef>(
++  //     TryCFDictionaryGetValue(dictionary, _kCFSystemVersionProductVersionKey));
+   std::string version;
+   if (!version_cf) {
+     LOG(ERROR) << "version_cf not found";
+@@ -221,8 +215,8 @@
+     success &= StringToVersionNumbers(version, major, minor, bugfix);
+   }
+
+-  CFStringRef build_cf = base::mac::CFCast<CFStringRef>(
+-      TryCFDictionaryGetValue(dictionary, _kCFSystemVersionBuildVersionKey));
++  // CFStringRef build_cf = base::mac::CFCast<CFStringRef>(
++  //     TryCFDictionaryGetValue(dictionary, _kCFSystemVersionBuildVersionKey));
+   if (!build_cf) {
+     LOG(ERROR) << "build_cf not found";
+     success = false;
+@@ -230,8 +224,8 @@
+     build->assign(base::SysCFStringRefToUTF8(build_cf));
+   }
+
+-  CFStringRef product_cf = base::mac::CFCast<CFStringRef>(
+-      TryCFDictionaryGetValue(dictionary, _kCFSystemVersionProductNameKey));
++  // CFStringRef product_cf = base::mac::CFCast<CFStringRef>(
++  //     TryCFDictionaryGetValue(dictionary, _kCFSystemVersionProductNameKey));
+   std::string product;
+   if (!product_cf) {
+     LOG(ERROR) << "product_cf not found";
 diff -ruN third_party/webrtc/modules/video_render/BUILD.gn third_party/webrtc/modules/video_render/BUILD.gn
---- third_party/webrtc/modules/video_render/BUILD.gn	2015-05-21 19:41:46.000000000 -0700
-+++ third_party/webrtc/modules/video_render/BUILD.gn	2015-06-30 21:23:27.000000000 -0700
+--- third_party/webrtc/modules/video_render/BUILD.gn
++++ third_party/webrtc/modules/video_render/BUILD.gn
 @@ -110,7 +110,6 @@
 
        libs += [
@@ -847,9 +1028,73 @@ diff -ruN third_party/webrtc/modules/video_render/BUILD.gn third_party/webrtc/mo
        ]
      }
      if (is_win) {
+diff -ruN tools/gyp/pylib/gyp/MSVSVersion.py tools/gyp/pylib/gyp/MSVSVersion.py
+--- tools/gyp/pylib/gyp/MSVSVersion.py
++++ tools/gyp/pylib/gyp/MSVSVersion.py
+@@ -77,34 +77,33 @@
+     assert target_arch in ('x86', 'x64')
+     sdk_dir = os.environ.get('WindowsSDKDir')
+     if self.sdk_based and sdk_dir:
+-      setenv_cmd = os.path.normpath(os.path.join(sdk_dir, 'Bin/SetEnv.Cmd'))
+-      if os.path.isfile(setenv_cmd):
+-        return [setenv_cmd, '/' + target_arch]
+-
+-    # We don't use VC/vcvarsall.bat for x86 because vcvarsall calls
+-    # vcvars32, which it can only find if VS??COMNTOOLS is set, which it
+-    # isn't always.
+-    if target_arch == 'x86':
+-      if self.short_name == '2013' and (
+-          os.environ.get('PROCESSOR_ARCHITECTURE') == 'AMD64' or
+-          os.environ.get('PROCESSOR_ARCHITEW6432') == 'AMD64'):
+-        # VS2013 non-Express has a x64-x86 cross that we want to prefer.
+-        return [os.path.normpath(
+-           os.path.join(self.path, 'VC/vcvarsall.bat')), 'amd64_x86']
+-      # Otherwise, the standard x86 compiler.
+-      return [os.path.normpath(
+-        os.path.join(self.path, 'Common7/Tools/vsvars32.bat'))]
++      return [os.path.normpath(os.path.join(sdk_dir, 'Bin/SetEnv.Cmd')),
++              '/' + target_arch]
+     else:
+-      assert target_arch == 'x64'
+-      arg = 'x86_amd64'
+-      # Use the 64-on-64 compiler if we're not using an express
+-      # edition and we're running on a 64bit OS.
+-      if self.short_name[-1] != 'e' and (
+-          os.environ.get('PROCESSOR_ARCHITECTURE') == 'AMD64' or
+-          os.environ.get('PROCESSOR_ARCHITEW6432') == 'AMD64'):
+-        arg = 'amd64'
+-      return [os.path.normpath(
+-          os.path.join(self.path, 'VC/vcvarsall.bat')), arg]
++      # We don't use VC/vcvarsall.bat for x86 because vcvarsall calls
++      # vcvars32, which it can only find if VS??COMNTOOLS is set, which it
++      # isn't always.
++      if target_arch == 'x86':
++        if self.short_name == '2013' and (
++            os.environ.get('PROCESSOR_ARCHITECTURE') == 'AMD64' or
++            os.environ.get('PROCESSOR_ARCHITEW6432') == 'AMD64'):
++          # VS2013 non-Express has a x64-x86 cross that we want to prefer.
++          return [os.path.normpath(
++             os.path.join(self.path, 'VC/vcvarsall.bat')), 'amd64_x86']
++        # Otherwise, the standard x86 compiler.
++        return [os.path.normpath(
++          os.path.join(self.path, 'Common7/Tools/vsvars32.bat'))]
++      else:
++        assert target_arch == 'x64'
++        arg = 'x86_amd64'
++        # Use the 64-on-64 compiler if we're not using an express
++        # edition and we're running on a 64bit OS.
++        if self.short_name[-1] != 'e' and (
++            os.environ.get('PROCESSOR_ARCHITECTURE') == 'AMD64' or
++            os.environ.get('PROCESSOR_ARCHITEW6432') == 'AMD64'):
++          arg = 'amd64'
++        return [os.path.normpath(
++            os.path.join(self.path, 'VC/vcvarsall.bat')), arg]
+
+
+ def _RegistryQueryBase(sysdir, key, value):
 diff -ruN tools/gyp/tools/emacs/testdata/media.gyp tools/gyp/tools/emacs/testdata/media.gyp
---- tools/gyp/tools/emacs/testdata/media.gyp	2014-10-10 01:14:59.000000000 -0700
-+++ tools/gyp/tools/emacs/testdata/media.gyp	2015-06-30 09:23:24.000000000 -0700
+--- tools/gyp/tools/emacs/testdata/media.gyp
++++ tools/gyp/tools/emacs/testdata/media.gyp
 @@ -438,7 +438,6 @@
                '$(SDKROOT)/System/Library/Frameworks/AudioToolbox.framework',
                '$(SDKROOT)/System/Library/Frameworks/CoreAudio.framework',
@@ -859,8 +1104,8 @@ diff -ruN tools/gyp/tools/emacs/testdata/media.gyp tools/gyp/tools/emacs/testdat
            },
          }],
 diff -ruN ui/events/cocoa/events_mac.mm ui/events/cocoa/events_mac.mm
---- ui/events/cocoa/events_mac.mm	2015-04-23 11:58:20.000000000 -0700
-+++ ui/events/cocoa/events_mac.mm	2015-06-29 10:04:26.000000000 -0700
+--- ui/events/cocoa/events_mac.mm
++++ ui/events/cocoa/events_mac.mm	2015-07-08 16:12:32.000000000 -0700
 @@ -1,7 +1,7 @@
  // Copyright 2014 The Chromium Authors. All rights reserved.
  // Use of this source code is governed by a BSD-style license that can be
@@ -870,9 +1115,60 @@ diff -ruN ui/events/cocoa/events_mac.mm ui/events/cocoa/events_mac.mm
  #include "ui/events/event_utils.h"
 
  #include <Cocoa/Cocoa.h>
+diff -ruN ui/gfx/font_fallback_mac.mm ui/gfx/font_fallback_mac.mm
+--- ui/gfx/font_fallback_mac.mm
++++ ui/gfx/font_fallback_mac.mm
+@@ -1,6 +1,7 @@
+ // Copyright 2015 The Chromium Authors. All rights reserved.
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
++#pragma clang diagnostic ignored "-Wreturn-type"
+
+ #include "ui/gfx/font_fallback.h"
+
+@@ -16,29 +17,8 @@
+ // CTFontCopyDefaultCascadeListForLanguages() doesn't exist in the 10.6 SDK.
+ // There is only the following. It doesn't exist in the public header files,
+ // but is an exported symbol so should always link.
+-extern "C" CFArrayRef CTFontCopyDefaultCascadeList(CTFontRef font_ref);
++// extern "C" CFArrayRef CTFontCopyDefaultCascadeList(CTFontRef font_ref);
+
+-namespace {
+-
+-// Wrapper for CTFontCopyDefaultCascadeListForLanguages() which should appear in
+-// CoreText.h from 10.8 onwards.
+-// TODO(tapted): Delete this wrapper when only 10.8+ is supported.
+-CFArrayRef CTFontCopyDefaultCascadeListForLanguagesWrapper(
+-    CTFontRef font_ref,
+-    CFArrayRef language_pref_list) {
+-  typedef CFArrayRef (*MountainLionPrototype)(CTFontRef, CFArrayRef);
+-  static const MountainLionPrototype cascade_with_languages_function =
+-      reinterpret_cast<MountainLionPrototype>(
+-          dlsym(RTLD_DEFAULT, "CTFontCopyDefaultCascadeListForLanguages"));
+-  if (cascade_with_languages_function)
+-    return cascade_with_languages_function(font_ref, language_pref_list);
+-
+-  // Fallback to the 10.6 Private API.
+-  DCHECK(base::mac::IsOSLionOrEarlier());
+-  return CTFontCopyDefaultCascadeList(font_ref);
+-}
+-
+-}  // namespace
+
+ namespace gfx {
+
+@@ -78,7 +58,7 @@
+       stringArrayForKey:@"AppleLanguages"];
+   CFArrayRef languages_cf = base::mac::NSToCFCast(languages);
+   base::ScopedCFTypeRef<CFArrayRef> cascade_list(
+-      CTFontCopyDefaultCascadeListForLanguagesWrapper(base_font, languages_cf));
++      CTFontCopyDefaultCascadeListForLanguages(base_font, languages_cf));
+
+   std::vector<std::string> fallback_fonts;
+
 diff -ruN ui/shell_dialogs/select_file_dialog_mac.mm ui/shell_dialogs/select_file_dialog_mac.mm
---- ui/shell_dialogs/select_file_dialog_mac.mm	2015-02-25 13:55:54.000000000 -0800
-+++ ui/shell_dialogs/select_file_dialog_mac.mm	2015-06-29 09:26:24.000000000 -0700
+--- ui/shell_dialogs/select_file_dialog_mac.mm
++++ ui/shell_dialogs/select_file_dialog_mac.mm
 @@ -4,6 +4,7 @@
 
  #include "ui/shell_dialogs/select_file_dialog.h"
